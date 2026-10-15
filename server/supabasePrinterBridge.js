@@ -4,7 +4,13 @@
 // ==============================================================================
 
 import { getSupabaseClient } from '../src/services/supabase.js';
-import { checkPrinterOnline, sendRawToPrinter } from './printerBridge.js';
+import {
+  checkPrinterOnline,
+  sendRawToPrinter,
+  getInstalledPrinters,
+  sendToDefaultOsPrinter,
+  isOfficePrinter
+} from './printerBridge.js';
 
 export const PRINTER_CHANNEL_NAME = 'sdg-printer-bridge';
 
@@ -12,7 +18,7 @@ export const PRINTER_CHANNEL_NAME = 'sdg-printer-bridge';
  * Inicia o listener de impressão conectado ao Supabase Realtime no computador da loja
  */
 export function startSupabasePrinterListener({
-  defaultIp = process.env.PRINTER_IP || '192.168.1.20',
+  defaultIp = process.env.PRINTER_IP || '192.168.1.100',
   defaultPort = 9100,
   onStatusChange = null
 } = {}) {
@@ -26,14 +32,38 @@ export function startSupabasePrinterListener({
     config: { broadcast: { self: false } }
   });
 
-  // 1. Responder a PING de status emitido pela Vercel / Web
+  // 1. Responder a solicitação de lista de impressoras instaladas
+  channel.on('broadcast', { event: 'printer_list_request' }, async ({ payload }) => {
+    const reqId = payload?.reqId;
+    console.log(`📋 [NUVEM] Solicitação de lista de impressoras recebida da Vercel`);
+    try {
+      const printersData = await getInstalledPrinters();
+      await channel.send({
+        type: 'broadcast',
+        event: 'printer_list_response',
+        payload: {
+          reqId,
+          success: true,
+          printers: printersData.printers || [],
+          defaultPrinter: printersData.defaultPrinter || '',
+          networkPrinters: printersData.networkPrinters || [],
+          timestamp: Date.now()
+        }
+      });
+    } catch (err) {
+      console.error('[NUVEM] Erro ao listar impressoras:', err.message);
+    }
+  });
+
+  // 2. Responder a PING de status emitido pela Vercel / Web
   channel.on('broadcast', { event: 'printer_ping' }, async ({ payload }) => {
     const reqId = payload?.reqId;
     const ip = payload?.ip || defaultIp;
     const port = Number(payload?.port) || defaultPort;
+    const printerName = payload?.printerName || '';
 
-    console.log(`📡 [NUVEM] Ping recebido da Vercel para impressora ${ip}:${port}`);
-    const status = await checkPrinterOnline(ip, port, 2500);
+    console.log(`📡 [NUVEM] Ping recebido da Vercel para impressora ${printerName || `${ip}:${port}`}`);
+    const status = await checkPrinterOnline(printerName);
 
     await channel.send({
       type: 'broadcast',
@@ -43,23 +73,26 @@ export function startSupabasePrinterListener({
         online: status.online,
         ip,
         port,
-        message: status.message || (status.online ? `Impressora Elgin i8 online em ${ip}:${port}` : 'Impressora offline'),
+        printerName,
+        message: status.message || (status.online ? `Impressora ${printerName || 'Padrão'} pronta` : 'Impressora offline'),
         timestamp: Date.now()
       }
     });
   });
 
-  // 2. Responder a requisição de impressão vinda da Vercel
+  // 3. Responder a requisição de impressão vinda da Vercel
   channel.on('broadcast', { event: 'printer_print_request' }, async ({ payload }) => {
     const jobId = payload?.jobId;
     const ip = payload?.ip || defaultIp;
     const port = Number(payload?.port) || defaultPort;
+    const printerName = payload?.printerName || '';
     const rawEscpos = payload?.rawEscpos;
+    const isOffice = payload?.isOffice !== undefined ? payload.isOffice : isOfficePrinter(printerName);
     const tickets = Array.isArray(payload?.tickets) && payload.tickets.length > 0
       ? payload.tickets
       : (rawEscpos ? [rawEscpos] : []);
 
-    console.log(`🖨️ [NUVEM] Pedido de impressão recebido da Vercel (${tickets.length} cupom/comanda) para ${ip}:${port}`);
+    console.log(`🖨️ [NUVEM] Pedido de impressão recebido da Vercel (${tickets.length} cupom) para ${printerName || `${ip}:${port}`}`);
 
     if (tickets.length === 0) {
       await channel.send({
@@ -68,7 +101,7 @@ export function startSupabasePrinterListener({
         payload: {
           jobId,
           success: false,
-          error: 'Nenhum comando ESC/POS fornecido.',
+          error: 'Nenhum dado fornecido para impressão.',
           timestamp: Date.now()
         }
       });
@@ -76,16 +109,17 @@ export function startSupabasePrinterListener({
     }
 
     try {
-      // Combina todas as vias (Balcão e Motoboy) em um único fluxo contínuo com comando de corte entre elas.
-      // Isso elimina 100% o erro de reconexão TCP e garante que ambas as vias sejam impressas e cortadas.
       const combinedPayload = tickets
         .map(t => (typeof t === 'object' && t.rawEscpos ? t.rawEscpos : t))
         .join('');
 
-      const res = await sendRawToPrinter(combinedPayload, ip, port);
+      const res = isOffice
+        ? await sendToDefaultOsPrinter(combinedPayload, printerName, { isOffice: true })
+        : await sendRawToPrinter(combinedPayload, ip, port, printerName);
+
       const totalBytes = res.bytesWritten || 0;
 
-      console.log(`✅ [NUVEM] Impressão concluída com sucesso na Elgin i8 (${totalBytes} bytes)!`);
+      console.log(`✅ [NUVEM] Impressão concluída com sucesso na ${printerName || 'impressora padrão'} (${totalBytes} bytes)!`);
 
       await channel.send({
         type: 'broadcast',
@@ -95,16 +129,15 @@ export function startSupabasePrinterListener({
           success: true,
           ticketsCount: tickets.length,
           bytesWritten: totalBytes,
-          ip,
-          port,
+          printer: res.printer || printerName || 'Padrão',
           message: tickets.length > 1
-            ? `2 Vias (Balcão & Cozinha + Motoboy) impressas e cortadas com sucesso na Elgin i8 (${ip}:${port})`
-            : `Impresso com sucesso na Elgin i8 (${ip}:${port})`,
+            ? `2 Vias impressas na impressora "${res.printer || printerName || 'Padrão'}"!`
+            : `Cupom impresso na impressora "${res.printer || printerName || 'Padrão'}"!`,
           timestamp: Date.now()
         }
       });
     } catch (err) {
-      console.error(`❌ [NUVEM] Erro ao imprimir na Elgin i8:`, err.message);
+      console.error(`❌ [NUVEM] Erro ao imprimir:`, err.message);
       await channel.send({
         type: 'broadcast',
         event: 'printer_print_response',
@@ -112,25 +145,48 @@ export function startSupabasePrinterListener({
           jobId,
           success: false,
           error: err.message,
-          ip,
-          port,
+          printer: printerName,
           timestamp: Date.now()
         }
       });
     }
   });
 
-  // 3. Responder a teste de impressão vindo da Vercel
+  // 4. Responder a teste de impressão vindo da Vercel
   channel.on('broadcast', { event: 'printer_test_request' }, async ({ payload }) => {
     const jobId = payload?.jobId;
     const ip = payload?.ip || defaultIp;
     const port = Number(payload?.port) || defaultPort;
-    const rawEscpos = payload?.rawEscpos || '\x1B@\x1Ba\x01SDG RESTAURANTE\nTESTE DE IMPRESSAO ELGIN i8 VIA VERCEL\nIP: ' + ip + ':' + port + '\nCONEXAO COM SUCESSO!\n\n\n\n\x1DV\x00';
+    const printerName = payload?.printerName || '';
+    const isOffice = payload?.isOffice !== undefined ? payload.isOffice : isOfficePrinter(printerName);
 
-    console.log(`🧪 [NUVEM] Teste de impressão recebido da Vercel para ${ip}:${port}`);
+    console.log(`🧪 [NUVEM] Teste de impressão recebido da Vercel para ${printerName || `${ip}:${port}`}`);
+
+    let testContent = payload?.rawEscpos;
+    if (!testContent) {
+      if (isOffice) {
+        testContent = [
+          '====================================================',
+          '                 SDG RESTAURANTE',
+          '====================================================',
+          'TESTE DE IMPRESSAO VIA NUVEM (VERCEL -> CUPS LINUX)',
+          `IMPRESSORA: ${printerName || 'EPSON EcoTank L3250'}`,
+          `DATA/HORA:  ${new Date().toLocaleString('pt-BR')}`,
+          'STATUS:     COMUNICACAO VIA NUVEM COM SUCESSO!',
+          'SISTEMA:    SDG Delivery & Gestao de Cozinha (KDS)',
+          '====================================================',
+          '\n\n'
+        ].join('\n');
+      } else {
+        testContent = '\x1B@\x1Ba\x01SDG RESTAURANTE\nTESTE DE IMPRESSAO VIA VERCEL\nCONEXAO COM SUCESSO!\n\n\n\n\x1DV\x00';
+      }
+    }
 
     try {
-      const res = await sendRawToPrinter(rawEscpos, ip, port);
+      const res = isOffice
+        ? await sendToDefaultOsPrinter(testContent, printerName, { isOffice: true })
+        : await sendRawToPrinter(testContent, ip, port, printerName);
+
       console.log(`✅ [NUVEM] Teste impresso com sucesso!`);
       await channel.send({
         type: 'broadcast',
@@ -139,7 +195,8 @@ export function startSupabasePrinterListener({
           jobId,
           success: true,
           bytesWritten: res.bytesWritten,
-          message: res.message || `Teste impresso com sucesso na Elgin i8 (${ip}:${port})`,
+          printer: res.printer || printerName || 'Padrão',
+          message: res.message || `Teste impresso com sucesso na impressora "${res.printer || printerName || 'Padrão'}"!`,
           timestamp: Date.now()
         }
       });

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useOrder } from '../../context/OrderContext';
 import {
-  Printer, RefreshCw, ChefHat, Store, Settings, Check, ChevronDown, ChevronUp, Scissors
+  Printer, RefreshCw, ChefHat, Store, Settings, Check, ChevronDown, ChevronUp, Scissors, Globe
 } from 'lucide-react';
 import { fetchInstalledPrinters, PrinterManager } from '../../services/printerService';
 
@@ -151,26 +151,88 @@ export const PrinterSettingsAdmin = () => {
         {/* Coluna 1: Dispositivo & Papel */}
         <div className="space-y-4">
           
-          {/* Seletor de Impressora */}
+          {/* Seletor do Modo de Impressão */}
           <div>
             <label className="block text-xs font-bold text-slate-300 mb-1.5">
-              Impressora:
+              Modo de Impressão:
             </label>
-            <select
-              value={formData.printerName}
-              onChange={(e) => handleChange('printerName', e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white text-xs font-medium focus:outline-none focus:border-amber-500 transition-colors"
-            >
-              <option value="">
-                🌟 Padrão do Sistema {defaultPrinter ? `(${defaultPrinter})` : ''}
-              </option>
-              {installedPrinters.map(p => (
-                <option key={p} value={p}>
-                  🖨️ {p} {p === defaultPrinter ? '★ (Padrão)' : ''}
-                </option>
-              ))}
-            </select>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => handleChange('mode', 'browser')}
+                className={`p-3 rounded-xl border text-left text-xs font-bold transition-all flex flex-col space-y-1 ${
+                  formData.mode === 'browser'
+                    ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-sm'
+                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+                }`}
+              >
+                <div className="flex items-center space-x-1.5">
+                  <Globe className="w-4 h-4 shrink-0" />
+                  <span className="font-extrabold">Diálogo do Navegador</span>
+                </div>
+                <span className={`text-[10px] font-normal leading-snug ${formData.mode === 'browser' ? 'text-slate-900 font-medium' : 'text-slate-500'}`}>
+                  Recomendado na Web/Nuvem. O Chrome lista 100% das suas impressoras nativas com exatidão.
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleChange('mode', 'os_default')}
+                className={`p-3 rounded-xl border text-left text-xs font-bold transition-all flex flex-col space-y-1 ${
+                  formData.mode === 'os_default'
+                    ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-sm'
+                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+                }`}
+              >
+                <div className="flex items-center space-x-1.5">
+                  <Printer className="w-4 h-4 shrink-0" />
+                  <span className="font-extrabold">Impressão Direta</span>
+                </div>
+                <span className={`text-[10px] font-normal leading-snug ${formData.mode === 'os_default' ? 'text-slate-900 font-medium' : 'text-slate-500'}`}>
+                  Envia direto para a fila do Linux (CUPS) ou da loja sem abrir janelas.
+                </span>
+              </button>
+            </div>
           </div>
+
+          {/* Seletor de Impressora (apenas no modo direto) */}
+          {formData.mode === 'os_default' && (
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-bold text-slate-300">
+                  Impressora de Destino:
+                </label>
+                {installedPrinters.length === 0 && (
+                  <span className="text-[10px] text-amber-400">
+                    Padrão do Sistema Ativa
+                  </span>
+                )}
+              </div>
+              <select
+                value={formData.printerName}
+                onChange={(e) => handleChange('printerName', e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white text-xs font-medium focus:outline-none focus:border-amber-500 transition-colors"
+              >
+                <option value="">
+                  🌟 Padrão do Sistema {defaultPrinter ? `(${defaultPrinter})` : ''}
+                </option>
+                {installedPrinters.map(p => (
+                  <option key={p} value={p}>
+                    🖨️ {p} {p === defaultPrinter ? '★ (Padrão)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {formData.mode === 'browser' && (
+            <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-xs flex items-start space-x-2.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 mt-1 shrink-0"></span>
+              <p className="text-[11px] text-slate-300 leading-relaxed">
+                Ao clicar em <strong>Imprimir</strong> no Balcão ou Cozinha, o diálogo do seu navegador abrirá exibindo <strong>todas as impressoras instaladas</strong> no seu computador (Epson L3250, PDF, etc.) em <strong>1 página única</strong> sem cortes.
+              </p>
+            </div>
+          )}
 
           {/* Tipo / Driver */}
           <div>

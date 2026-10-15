@@ -351,29 +351,92 @@ export async function testPrinterStatus(settings = null) {
 }
 
 /**
- * Consulta as impressoras instaladas no sistema operacional (Windows / Mac)
+ * Consulta impressoras instaladas via Ponte em Nuvem Supabase Realtime (para Vercel / HTTPS)
+ */
+export function fetchInstalledPrintersViaCloud(timeoutMs = 3000) {
+  const channel = getPrinterRelayChannel();
+  if (!channel) return Promise.resolve({ success: false, printers: [], defaultPrinter: '' });
+
+  return new Promise((resolve) => {
+    const reqId = 'list_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+    let resolved = false;
+
+    const timer = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        resolve({ success: false, printers: [], defaultPrinter: '' });
+      }
+    }, timeoutMs);
+
+    const handler = ({ payload }) => {
+      if (payload?.reqId === reqId && !resolved) {
+        resolved = true;
+        clearTimeout(timer);
+        resolve({
+          success: true,
+          printers: Array.isArray(payload.printers) ? payload.printers : [],
+          defaultPrinter: payload.defaultPrinter || '',
+          networkPrinters: Array.isArray(payload.networkPrinters) ? payload.networkPrinters : []
+        });
+      }
+    };
+
+    channel.on('broadcast', { event: 'printer_list_response' }, handler);
+
+    channel.send({
+      type: 'broadcast',
+      event: 'printer_list_request',
+      payload: { reqId, timestamp: Date.now() }
+    }).catch(() => {
+      if (!resolved) {
+        resolved = true;
+        clearTimeout(timer);
+        resolve({ success: false, printers: [], defaultPrinter: '' });
+      }
+    });
+  });
+}
+
+/**
+ * Consulta as impressoras instaladas no sistema operacional (Windows / Linux CUPS)
  */
 export async function fetchInstalledPrinters(customServiceUrl = '') {
-  const endpoints = getPrintCandidateEndpoints(customServiceUrl);
-  for (const base of endpoints) {
-    try {
-      const url = `${base}/api/printer/list`;
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
-      const res = await fetch(url, { signal: controller.signal });
-      clearTimeout(timeoutId);
+  const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
 
-      if (res.ok) {
-        const data = await res.json();
-        return {
-          success: true,
-          printers: Array.isArray(data.printers) ? data.printers : [],
-          defaultPrinter: data.defaultPrinter || '',
-          networkPrinters: Array.isArray(data.networkPrinters) ? data.networkPrinters : []
-        };
+  // 1. Se estiver em HTTP local, consulta endpoints locais
+  if (!isHttps) {
+    const endpoints = getPrintCandidateEndpoints(customServiceUrl);
+    for (const base of endpoints) {
+      try {
+        const url = `${base}/api/printer/list`;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2500);
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          const data = await res.json();
+          return {
+            success: true,
+            printers: Array.isArray(data.printers) ? data.printers : [],
+            defaultPrinter: data.defaultPrinter || '',
+            networkPrinters: Array.isArray(data.networkPrinters) ? data.networkPrinters : []
+          };
+        }
+      } catch (e) {}
+    }
+  }
+
+  // 2. Se estiver em HTTPS (Vercel / Nuvem), tenta obter via Ponte Supabase Realtime
+  if (isHttps) {
+    try {
+      const cloudRes = await fetchInstalledPrintersViaCloud(3000);
+      if (cloudRes.success && cloudRes.printers?.length > 0) {
+        return cloudRes;
       }
     } catch (e) {}
   }
+
   return { success: false, printers: [], defaultPrinter: '', networkPrinters: [] };
 }
 
