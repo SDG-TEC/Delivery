@@ -50,7 +50,10 @@ export const DEFAULT_PRINTER_SETTINGS = {
   printerName: '', // Nome da impressora instalada no SO (ex: "Elgin i8", "POS-80" ou vazio para Padrão do Sistema)
   driverId: 'auto', // 'auto' | 'escpos_thermal' | 'a4_office' | 'browser' | 'pdf_virtual'
   enabled: true,
-  mode: 'os_default', // 'os_default' (impressora padrão do SO: USB, Wi-Fi, cabo) | 'browser' (janela do navegador) | 'network' (opcional IP)
+  // 'browser' (padrão): impressão pelo próprio Chrome — lista as impressoras do Windows/rede, sem servidor.
+  //   Em Chrome --kiosk-printing, imprime direto e sem diálogo na última impressora usada / padrão do Windows.
+  // 'os_default': envio ESC/POS via ponte local (printer-server.js) — exige servidor rodando na loja.
+  mode: 'browser',
   paperWidth: '80mm', // '80mm' | '58mm' | 'A4'
   autoPrintKitchenOnConfirm: true,
   autoPrintCounterOnConfirm: true,
@@ -69,8 +72,8 @@ export function getPrinterSettings() {
     const raw = localStorage.getItem(PRINTER_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      // Garante migração suave para a impressora padrão do SO
-      const mode = (parsed.mode === 'network' || !parsed.mode) ? 'os_default' : parsed.mode;
+      // Sem modo salvo → impressão pelo Chrome (não depende de servidor). 'network' legado → ponte local.
+      const mode = !parsed.mode ? 'browser' : (parsed.mode === 'network' ? 'os_default' : parsed.mode);
       const paperWidth = (parsed.paperWidth === 'A4' || parsed.paperWidth === 'a4') ? 'A4' : (parsed.paperWidth === '58mm' ? '58mm' : '80mm');
       const printerName = parsed.printerName || '';
       const driverId = parsed.driverId || 'auto';
@@ -455,9 +458,40 @@ export async function fetchInstalledPrinters(customServiceUrl = '') {
 }
 
 /**
+ * Verifica rapidamente (com cache) se existe uma ponte de impressão ativa via Supabase.
+ * Em um PC sem servidor instalado, responde "offline" em ~1,5s e o resultado fica em cache,
+ * evitando esperas longas antes de cair para a impressão do Chrome.
+ */
+let bridgeStatusCache = { online: false, checkedAt: 0 };
+const BRIDGE_CACHE_MS = 60000;
+
+async function isCloudBridgeOnline(cfg) {
+  const now = Date.now();
+  if (now - bridgeStatusCache.checkedAt < BRIDGE_CACHE_MS) {
+    return bridgeStatusCache.online;
+  }
+  try {
+    const res = await testPrinterStatusViaCloud(cfg, 1500);
+    bridgeStatusCache = { online: !!res.online, checkedAt: now };
+  } catch (e) {
+    bridgeStatusCache = { online: false, checkedAt: now };
+  }
+  return bridgeStatusCache.online;
+}
+
+/**
  * Envia um ou mais cupons para impressão (tenta local se HTTP, ou via Nuvem se Vercel)
  */
 async function sendEscposToEndpoint({ rawEscpos, tickets = null, type, orderId, order, cfg }) {
+  // Modo Chrome: não depende de servidor, imprime pelo navegador (diálogo ou --kiosk-printing)
+  if (cfg.mode === 'browser') {
+    return {
+      success: false,
+      fallbackToBrowser: true,
+      error: 'Modo de impressão pelo Chrome.'
+    };
+  }
+
   const ip = cfg.ip || DEFAULT_PRINTER_SETTINGS.ip;
   const port = cfg.port || 9100;
   const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
@@ -506,8 +540,16 @@ async function sendEscposToEndpoint({ rawEscpos, tickets = null, type, orderId, 
     }
   }
 
-  // 2. Se estiver na Vercel (HTTPS): Envia pela Ponte em Nuvem Supabase!
+  // 2. Se estiver na Vercel (HTTPS): Envia pela Ponte em Nuvem Supabase (só se houver ponte ativa na loja)
   if (isHttps) {
+    const bridgeOnline = await isCloudBridgeOnline(cfg);
+    if (!bridgeOnline) {
+      return {
+        success: false,
+        fallbackToBrowser: true,
+        error: 'Nenhuma ponte de impressão ativa. Imprimindo pelo Chrome.'
+      };
+    }
     return sendEscposViaCloud({
       rawEscpos,
       tickets,
@@ -727,8 +769,8 @@ export async function printTestTicketDirect(settings = null) {
     }
   }
 
-  // 2. Se estiver na Vercel (HTTPS): Envia via Ponte em Nuvem Supabase
-  if (isHttps) {
+  // 2. Se estiver na Vercel (HTTPS): Envia via Ponte em Nuvem Supabase (somente se houver ponte ativa)
+  if (isHttps && await isCloudBridgeOnline(cfg)) {
     return printTestViaCloud(cfg, 4000);
   }
 

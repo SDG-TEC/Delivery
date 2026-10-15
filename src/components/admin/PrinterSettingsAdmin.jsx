@@ -15,7 +15,7 @@ export const PrinterSettingsAdmin = () => {
 
   const [formData, setFormData] = useState({
     enabled: printerSettings?.enabled !== false,
-    mode: printerSettings?.mode || 'os_default',
+    mode: printerSettings?.mode || 'browser',
     printerName: printerSettings?.printerName || '',
     driverId: printerSettings?.driverId || 'auto',
     paperWidth: printerSettings?.paperWidth || '80mm',
@@ -174,10 +174,10 @@ export const PrinterSettingsAdmin = () => {
               >
                 <div className="flex items-center space-x-1.5">
                   <Globe className="w-4 h-4 shrink-0" />
-                  <span className="font-extrabold">Diálogo do Navegador</span>
+                  <span className="font-extrabold">Chrome (sem instalar nada)</span>
                 </div>
                 <span className={`text-[10px] font-normal leading-snug ${formData.mode === 'browser' ? 'text-slate-900 font-medium' : 'text-slate-500'}`}>
-                  Recomendado na Web/Nuvem. O Chrome lista 100% das suas impressoras nativas com exatidão.
+                  Recomendado. Usa as impressoras do Windows e da rede direto pelo Chrome, sem servidor.
                 </span>
               </button>
 
@@ -192,10 +192,10 @@ export const PrinterSettingsAdmin = () => {
               >
                 <div className="flex items-center space-x-1.5">
                   <Printer className="w-4 h-4 shrink-0" />
-                  <span className="font-extrabold">Impressão Direta</span>
+                  <span className="font-extrabold">Ponte Local (ESC/POS)</span>
                 </div>
                 <span className={`text-[10px] font-normal leading-snug ${formData.mode === 'os_default' ? 'text-slate-900 font-medium' : 'text-slate-500'}`}>
-                  Envia direto para a fila do Linux (CUPS) ou da loja sem abrir janelas.
+                  Exige o servidor de impressão rodando na loja. Sem ele, cai automaticamente para o Chrome.
                 </span>
               </button>
             </div>
@@ -235,7 +235,9 @@ export const PrinterSettingsAdmin = () => {
             <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-xs flex items-start space-x-2.5">
               <span className="w-2 h-2 rounded-full bg-emerald-400 mt-1 shrink-0"></span>
               <p className="text-[11px] text-slate-300 leading-relaxed">
-                Ao clicar em <strong>Imprimir</strong> no Balcão ou Cozinha, o diálogo do seu navegador abrirá exibindo <strong>todas as impressoras instaladas</strong> no seu computador (Epson L3250, PDF, etc.) em <strong>1 página única</strong> sem cortes.
+                Ao imprimir, o Chrome mostra <strong>todas as impressoras do Windows e da rede</strong> para escolher.
+                No atalho de <strong>impressão silenciosa</strong> (<code>--kiosk-printing</code>), o cupom sai direto,
+                sem janela, na <strong>última impressora usada</strong> (ou na padrão do Windows).
               </p>
             </div>
           )}
