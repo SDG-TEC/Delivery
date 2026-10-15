@@ -200,7 +200,7 @@ export function startSupabasePrinterListener({
           '                 SDG RESTAURANTE',
           '====================================================',
           'TESTE DE IMPRESSAO VIA NUVEM (VERCEL -> CUPS LINUX)',
-          `IMPRESSORA: ${resolvedPrinter || 'EPSON EcoTank L3250'}`,
+          `IMPRESSORA: ${resolvedPrinter || 'PADRAO DO SISTEMA'}`,
           `DATA/HORA:  ${new Date().toLocaleString('pt-BR')}`,
           'STATUS:     COMUNICACAO VIA NUVEM COM SUCESSO!',
           'SISTEMA:    SDG Delivery & Gestao de Cozinha (KDS)',
