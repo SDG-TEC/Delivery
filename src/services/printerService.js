@@ -50,10 +50,6 @@ export const DEFAULT_PRINTER_SETTINGS = {
   printerName: '', // Nome da impressora instalada no SO (ex: "Elgin i8", "POS-80" ou vazio para Padrão do Sistema)
   driverId: 'auto', // 'auto' | 'escpos_thermal' | 'a4_office' | 'browser' | 'pdf_virtual'
   enabled: true,
-  // 'browser' (padrão): impressão pelo próprio Chrome — lista as impressoras do Windows/rede, sem servidor.
-  //   Em Chrome --kiosk-printing, imprime direto e sem diálogo na última impressora usada / padrão do Windows.
-  // 'os_default': envio ESC/POS via ponte local (printer-server.js) — exige servidor rodando na loja.
-  mode: 'browser',
   paperWidth: '80mm', // '80mm' | '58mm' | 'A4'
   autoPrintKitchenOnConfirm: true,
   autoPrintCounterOnConfirm: true,
@@ -72,13 +68,11 @@ export function getPrinterSettings() {
     const raw = localStorage.getItem(PRINTER_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      // Sem modo salvo → impressão pelo Chrome (não depende de servidor). 'network' legado → ponte local.
-      const mode = !parsed.mode ? 'browser' : (parsed.mode === 'network' ? 'os_default' : parsed.mode);
       const paperWidth = (parsed.paperWidth === 'A4' || parsed.paperWidth === 'a4') ? 'A4' : (parsed.paperWidth === '58mm' ? '58mm' : '80mm');
       const printerName = parsed.printerName || '';
       const driverId = parsed.driverId || 'auto';
       const ip = (parsed.ip && parsed.ip.trim() && parsed.ip !== '192.168.1.150') ? parsed.ip.trim() : DEFAULT_PRINTER_SETTINGS.ip;
-      return { ...DEFAULT_PRINTER_SETTINGS, ...parsed, mode, paperWidth, printerName, driverId, ip };
+      return { ...DEFAULT_PRINTER_SETTINGS, ...parsed, paperWidth, printerName, driverId, ip };
     }
   } catch (e) {
     console.error('Erro ao ler configurações da impressora:', e);
@@ -418,36 +412,34 @@ export function fetchInstalledPrintersViaCloud(timeoutMs = 3000) {
  * Consulta as impressoras instaladas no sistema operacional (Windows / Linux CUPS)
  */
 export async function fetchInstalledPrinters(customServiceUrl = '') {
-  const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+  // 1. Prioridade: Tenta obter diretamente do servidor local de impressão (porta 3001)
+  const endpoints = getPrintCandidateEndpoints(customServiceUrl);
+  for (const base of endpoints) {
+    if (!base) continue;
+    try {
+      const url = `${base}/api/printer/list`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
 
-  // 1. Se estiver em HTTP local, consulta endpoints locais
-  if (!isHttps) {
-    const endpoints = getPrintCandidateEndpoints(customServiceUrl);
-    for (const base of endpoints) {
-      try {
-        const url = `${base}/api/printer/list`;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2500);
-        const res = await fetch(url, { signal: controller.signal });
-        clearTimeout(timeoutId);
-
-        if (res.ok) {
-          const data = await res.json();
-          return {
-            success: true,
-            printers: Array.isArray(data.printers) ? data.printers : [],
-            defaultPrinter: data.defaultPrinter || '',
-            networkPrinters: Array.isArray(data.networkPrinters) ? data.networkPrinters : []
-          };
-        }
-      } catch (e) {}
-    }
+      if (res.ok) {
+        const data = await res.json();
+        return {
+          success: true,
+          printers: Array.isArray(data.printers) ? data.printers : [],
+          defaultPrinter: data.defaultPrinter || '',
+          networkPrinters: Array.isArray(data.networkPrinters) ? data.networkPrinters : []
+        };
+      }
+    } catch (e) {}
   }
 
-  // 2. Se estiver em HTTPS (Vercel / Nuvem), tenta obter via Ponte Supabase Realtime
+  // 2. Fallback: Se estiver em HTTPS na Nuvem, tenta obter via Ponte Supabase Realtime
+  const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
   if (isHttps) {
     try {
-      const cloudRes = await fetchInstalledPrintersViaCloud(3000);
+      const cloudRes = await fetchInstalledPrintersViaCloud(2500);
       if (cloudRes.success && cloudRes.printers?.length > 0) {
         return cloudRes;
       }
@@ -458,9 +450,7 @@ export async function fetchInstalledPrinters(customServiceUrl = '') {
 }
 
 /**
- * Verifica rapidamente (com cache) se existe uma ponte de impressão ativa via Supabase.
- * Em um PC sem servidor instalado, responde "offline" em ~1,5s e o resultado fica em cache,
- * evitando esperas longas antes de cair para a impressão do Chrome.
+ * Verifica rapidamente se existe uma ponte de impressão ativa via Supabase.
  */
 let bridgeStatusCache = { online: false, checkedAt: 0 };
 const BRIDGE_CACHE_MS = 60000;
@@ -480,90 +470,75 @@ async function isCloudBridgeOnline(cfg) {
 }
 
 /**
- * Envia um ou mais cupons para impressão (tenta local se HTTP, ou via Nuvem se Vercel)
+ * Envia cupons para impressão (Servidor local por padrão -> Fallback automático para o navegador)
  */
 async function sendEscposToEndpoint({ rawEscpos, tickets = null, type, orderId, order, cfg }) {
-  // Modo Chrome: não depende de servidor, imprime pelo navegador (diálogo ou --kiosk-printing)
-  if (cfg.mode === 'browser') {
-    return {
-      success: false,
-      fallbackToBrowser: true,
-      error: 'Modo de impressão pelo Chrome.'
-    };
-  }
-
   const ip = cfg.ip || DEFAULT_PRINTER_SETTINGS.ip;
   const port = cfg.port || 9100;
-  const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
 
-  // 1. Se estiver em HTTP local, tenta enviar via endpoint local HTTP
-  if (!isHttps) {
-    const endpoints = getPrintCandidateEndpoints(cfg.serviceUrl);
+  // 1. PRIORIDADE: Tenta o servidor local na porta 3001
+  const endpoints = getPrintCandidateEndpoints(cfg.serviceUrl);
 
-    for (const base of endpoints) {
-      try {
-        const url = `${base}/api/printer/print`;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2500);
+  for (const base of endpoints) {
+    if (!base) continue;
+    try {
+      const url = `${base}/api/printer/print`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2500);
 
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            printerIp: ip,
-            printerPort: port,
-            printerName: cfg.printerName || '',
-            type,
-            orderId,
-            rawEscpos,
-            tickets,
-            order,
-            cutPaper: cfg.cutPaper !== false,
-            paperWidth: cfg.paperWidth || '80mm'
-          }),
-          signal: controller.signal
-        });
-        clearTimeout(timeoutId);
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          printerIp: ip,
+          printerPort: port,
+          printerName: cfg.printerName || '',
+          type,
+          orderId,
+          rawEscpos,
+          tickets,
+          order,
+          cutPaper: cfg.cutPaper !== false,
+          paperWidth: cfg.paperWidth || '80mm'
+        }),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
 
-        if (res.ok) {
-          const data = await res.json();
-          return {
-            success: true,
-            endpoint: base,
-            via: 'local_http',
-            message: data.message || `Impresso com sucesso na impressora padrão do sistema!`
-          };
-        }
-      } catch (e) {
-        // Tenta próximo
+      if (res.ok) {
+        const data = await res.json();
+        return {
+          success: true,
+          fallbackToBrowser: false,
+          endpoint: base,
+          via: data.via || 'local_server',
+          message: data.message || `Impresso com sucesso na impressora "${cfg.printerName || 'Padrão'}"!`
+        };
       }
+    } catch (e) {
+      // Tenta próximo endpoint local
     }
   }
 
-  // 2. Se estiver na Vercel (HTTPS): Envia pela Ponte em Nuvem Supabase (só se houver ponte ativa na loja)
+  // 2. Se falhar o servidor local e estiver na Nuvem (Vercel), tenta a ponte em nuvem Supabase (se houver)
+  const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
   if (isHttps) {
-    const bridgeOnline = await isCloudBridgeOnline(cfg);
-    if (!bridgeOnline) {
-      return {
-        success: false,
-        fallbackToBrowser: true,
-        error: 'Nenhuma ponte de impressão ativa. Imprimindo pelo Chrome.'
-      };
-    }
-    return sendEscposViaCloud({
-      rawEscpos,
-      tickets,
-      type,
-      orderId,
-      order,
-      cfg
-    });
+    try {
+      const bridgeOnline = await isCloudBridgeOnline(cfg);
+      if (bridgeOnline) {
+        const cloudRes = await sendEscposViaCloud({ rawEscpos, tickets, type, orderId, order, cfg });
+        if (cloudRes.success) {
+          return { ...cloudRes, fallbackToBrowser: false };
+        }
+      }
+    } catch (e) {}
   }
 
+  // 3. FALLBACK NATIVO: Se o servidor não estiver acessível, chama automaticamente o navegador!
   return {
-    success: false,
+    success: true,
     fallbackToBrowser: true,
-    error: 'Serviço de impressão local não disponível, usando diálogo do navegador.'
+    message: 'Servidor local desconectado. Imprimindo pelo navegador...'
   };
 }
 
@@ -624,8 +599,8 @@ export async function printDirectToNetworkPrinter({ order, type = 'counter', set
   const cfg = settings || getPrinterSettings();
   const driver = PrinterManager.resolveDriver(cfg);
 
-  // Se o modo for explicitamente navegador ou virtual, roteia para o modo visual
-  if (cfg.mode === 'browser' || driver.category === 'virtual') {
+  // Se o driver for explicitamente virtual (ex: PDF), roteia para visualização
+  if (driver.category === 'virtual') {
     return {
       success: true,
       fallbackToBrowser: true,
@@ -636,7 +611,7 @@ export async function printDirectToNetworkPrinter({ order, type = 'counter', set
     };
   }
 
-  // Se for impressora de escritório conectada ao SO local (ex: Epson L3250 via CUPS)
+  // Se for impressora de escritório conectada ao SO local (ex: Epson L3250)
   if (driver.category === 'office') {
     const textSlip = buildOfficeTextSlip(order, type);
     return sendEscposToEndpoint({
@@ -667,9 +642,6 @@ export async function printDirectToNetworkPrinter({ order, type = 'counter', set
       onProgress({ step: 1, total: 1, label: '2 Vias', message: `🖨️ Imprimindo 2 Vias (Balcão & Cozinha + ${secondLabel})...` });
     }
 
-    // Envia os dois cupons juntos em um único fluxo contínuo (com comando de corte entre eles)
-    // O hardware da Elgin i8 imprime a 1ª via, aciona a lâmina, imprime a 2ª via e aciona a lâmina.
-    // Isso evita desconectar e reconectar o socket TCP e garante 100% de sucesso nas 2 vias.
     return sendEscposToEndpoint({
       rawEscpos: counterEscpos + secondEscpos,
       tickets: [counterEscpos, secondEscpos],
@@ -700,14 +672,13 @@ export async function printDirectToNetworkPrinter({ order, type = 'counter', set
 }
 
 /**
- * Envia um ticket de teste para a impressora Elgin i8 (direto via HTTP ou via Nuvem Supabase)
+ * Envia um ticket de teste para a impressora (prioriza servidor local -> fallback navegador)
  */
 export async function printTestTicketDirect(settings = null) {
   const cfg = settings || getPrinterSettings();
   const driver = PrinterManager.resolveDriver(cfg);
 
-  // Se o modo for explicitamente navegador ou virtual, roteia para o diálogo do navegador
-  if (cfg.mode === 'browser' || driver.category === 'virtual') {
+  if (driver.category === 'virtual') {
     return {
       success: true,
       fallbackToBrowser: true,
@@ -718,69 +689,66 @@ export async function printTestTicketDirect(settings = null) {
     };
   }
 
-  const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+  const isOffice = driver.category === 'office';
+  const rawEscpos = isOffice
+    ? ''
+    : buildTestEscpos({
+        paperWidth: cfg.paperWidth || '80mm',
+        cutMode: cfg.cutMode || 'full',
+        printerName: cfg.printerName || 'Impressora Padrão do Sistema'
+      });
 
-  // 1. Se estiver em HTTP local, tenta enviar via endpoint local HTTP
-  if (!isHttps) {
-    const isOffice = driver.category === 'office';
-    const rawEscpos = isOffice
-      ? ''
-      : buildTestEscpos({
-          paperWidth: cfg.paperWidth || '80mm',
-          cutMode: cfg.cutMode || 'full',
-          printerName: cfg.printerName || 'Impressora Padrão do Sistema'
-        });
-    const endpoints = getPrintCandidateEndpoints(cfg.serviceUrl);
+  // 1. Prioridade: Envia para o servidor local (localhost:3001)
+  const endpoints = getPrintCandidateEndpoints(cfg.serviceUrl);
+  for (const base of endpoints) {
+    if (!base) continue;
+    try {
+      const url = `${base}/api/printer/test`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2500);
 
-    for (const base of endpoints) {
-      try {
-        const url = `${base}/api/printer/test`;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          printerIp: cfg.ip,
+          printerPort: cfg.port,
+          printerName: cfg.printerName || '',
+          rawEscpos,
+          isOffice
+        }),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
 
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            printerIp: cfg.ip,
-            printerPort: cfg.port,
-            printerName: cfg.printerName || '',
-            rawEscpos,
-            isOffice
-          }),
-          signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.success) {
-            return {
-              success: true,
-              fallbackToBrowser: false,
-              via: data.via || 'local_http',
-              message: data.message || `Teste impresso com sucesso na impressora "${cfg.printerName || 'padrão'}"!`
-            };
-          }
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.success) {
+          return {
+            success: true,
+            fallbackToBrowser: false,
+            via: data.via || 'local_server',
+            message: data.message || `Teste impresso com sucesso na impressora "${cfg.printerName || 'padrão'}"!`
+          };
         }
-      } catch (e) {
-        // Tenta próximo
       }
-    }
+    } catch (e) {}
   }
 
-  // 2. Se estiver na Vercel (HTTPS): Envia via Ponte em Nuvem Supabase (somente se houver ponte ativa)
+  // 2. Ponte em nuvem Supabase
+  const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
   if (isHttps && await isCloudBridgeOnline(cfg)) {
-    return printTestViaCloud(cfg, 4000);
+    return printTestViaCloud(cfg, 3500);
   }
 
+  // 3. Fallback para visualização do navegador
   return {
     success: true,
     fallbackToBrowser: true,
     paperWidth: (driver.category === 'office' || cfg.paperWidth === 'A4') ? 'A4' : cfg.paperWidth,
     driverId: driver.id,
     driverName: driver.name,
-    message: `Visualização aberta para ${driver.name}.`
+    message: `Visualização aberta pelo navegador.`
   };
 }
 

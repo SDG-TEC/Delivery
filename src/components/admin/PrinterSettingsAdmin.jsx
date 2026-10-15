@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useOrder } from '../../context/OrderContext';
 import {
-  Printer, RefreshCw, ChefHat, Store, Settings, Check, ChevronDown, ChevronUp, Scissors, Globe
+  Printer, RefreshCw, ChefHat, Store, Settings, Check, ChevronDown, ChevronUp, Scissors
 } from 'lucide-react';
 import { fetchInstalledPrinters, PrinterManager } from '../../services/printerService';
 
@@ -15,7 +15,6 @@ export const PrinterSettingsAdmin = () => {
 
   const [formData, setFormData] = useState({
     enabled: printerSettings?.enabled !== false,
-    mode: printerSettings?.mode || 'browser',
     printerName: printerSettings?.printerName || '',
     driverId: printerSettings?.driverId || 'auto',
     paperWidth: printerSettings?.paperWidth || '80mm',
@@ -157,90 +156,53 @@ export const PrinterSettingsAdmin = () => {
         {/* Coluna 1: Dispositivo & Papel */}
         <div className="space-y-4">
           
-          {/* Seletor do Modo de Impressão */}
-          <div>
-            <label className="block text-xs font-bold text-slate-300 mb-1.5">
-              Modo de Impressão:
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => handleChange('mode', 'browser')}
-                className={`p-3 rounded-xl border text-left text-xs font-bold transition-all flex flex-col space-y-1 ${
-                  formData.mode === 'browser'
-                    ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-sm'
-                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
-                }`}
-              >
-                <div className="flex items-center space-x-1.5">
-                  <Globe className="w-4 h-4 shrink-0" />
-                  <span className="font-extrabold">Chrome (sem instalar nada)</span>
-                </div>
-                <span className={`text-[10px] font-normal leading-snug ${formData.mode === 'browser' ? 'text-slate-900 font-medium' : 'text-slate-500'}`}>
-                  Recomendado. Usa as impressoras do Windows e da rede direto pelo Chrome, sem servidor.
+          {/* Status do Servidor de Impressão */}
+          <div className="p-3.5 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <span className={`w-2.5 h-2.5 rounded-full ${installedPrinters.length > 0 ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}></span>
+                <span className="text-xs font-bold text-white">
+                  {installedPrinters.length > 0 ? 'Servidor de Impressão Conectado' : 'Servidor Local Desconectado'}
                 </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleChange('mode', 'os_default')}
-                className={`p-3 rounded-xl border text-left text-xs font-bold transition-all flex flex-col space-y-1 ${
-                  formData.mode === 'os_default'
-                    ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-sm'
-                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
-                }`}
-              >
-                <div className="flex items-center space-x-1.5">
-                  <Printer className="w-4 h-4 shrink-0" />
-                  <span className="font-extrabold">Ponte Local (ESC/POS)</span>
-                </div>
-                <span className={`text-[10px] font-normal leading-snug ${formData.mode === 'os_default' ? 'text-slate-900 font-medium' : 'text-slate-500'}`}>
-                  Exige o servidor de impressão rodando na loja. Sem ele, cai automaticamente para o Chrome.
-                </span>
-              </button>
+              </div>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-md font-bold bg-slate-900 border border-slate-750 text-slate-300">
+                {installedPrinters.length > 0 ? 'Porta 3001' : 'Fallback Navegador'}
+              </span>
             </div>
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              {installedPrinters.length > 0
+                ? 'Os pedidos são impressos direto pelo servidor local nas impressoras do Windows sem exibir nenhuma janela.'
+                : 'Quando o servidor não estiver aberto, o sistema chama automaticamente o diálogo de impressão do navegador.'}
+            </p>
           </div>
 
-          {/* Seletor de Impressora (apenas no modo direto) */}
-          {formData.mode === 'os_default' && (
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-bold text-slate-300">
-                  Impressora de Destino:
-                </label>
-                {installedPrinters.length === 0 && (
-                  <span className="text-[10px] text-amber-400">
-                    Padrão do Sistema Ativa
-                  </span>
-                )}
-              </div>
-              <select
-                value={formData.printerName}
-                onChange={(e) => handleChange('printerName', e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white text-xs font-medium focus:outline-none focus:border-amber-500 transition-colors"
-              >
-                <option value="">
-                  🌟 Padrão do Sistema {defaultPrinter ? `(${defaultPrinter})` : ''}
+          {/* Seletor de Impressora de Destino */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-bold text-slate-300">
+                Impressora de Destino:
+              </label>
+              {installedPrinters.length === 0 && (
+                <span className="text-[10px] text-amber-400">
+                  Padrão do Sistema Ativa
+                </span>
+              )}
+            </div>
+            <select
+              value={formData.printerName}
+              onChange={(e) => handleChange('printerName', e.target.value)}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white text-xs font-medium focus:outline-none focus:border-amber-500 transition-colors"
+            >
+              <option value="">
+                🌟 Padrão do Sistema {defaultPrinter ? `(${defaultPrinter})` : ''}
+              </option>
+              {installedPrinters.map(p => (
+                <option key={p} value={p}>
+                  🖨️ {p} {p === defaultPrinter ? '★ (Padrão)' : ''}
                 </option>
-                {installedPrinters.map(p => (
-                  <option key={p} value={p}>
-                    🖨️ {p} {p === defaultPrinter ? '★ (Padrão)' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {formData.mode === 'browser' && (
-            <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl text-xs flex items-start space-x-2.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 mt-1 shrink-0"></span>
-              <p className="text-[11px] text-slate-300 leading-relaxed">
-                Ao imprimir, o Chrome mostra <strong>todas as impressoras do Windows e da rede</strong> para escolher.
-                No atalho de <strong>impressão silenciosa</strong> (<code>--kiosk-printing</code>), o cupom sai direto,
-                sem janela, na <strong>última impressora usada</strong> (ou na padrão do Windows).
-              </p>
-            </div>
-          )}
+              ))}
+            </select>
+          </div>
 
           {/* Tipo / Driver */}
           <div>
