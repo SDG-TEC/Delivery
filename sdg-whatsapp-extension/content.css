@@ -1,0 +1,645 @@
+/* ==========================================================================
+   🚀 SDG Delivery - Estilos da Bolinha Flutuante e Painel Lateral no WhatsApp Web
+   Todos os estilos são prefixados com .sdg-wz-* para isolamento total
+   ========================================================================== */
+
+/* Bolinha Flutuante */
+#sdg-floating-bubble {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border: 2px solid #f59e0b;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6), 0 0 15px rgba(245, 158, 11, 0.4);
+  cursor: grab;
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
+}
+
+#sdg-floating-bubble:hover {
+  transform: scale(1.08);
+  box-shadow: 0 12px 30px -5px rgba(0, 0, 0, 0.7), 0 0 22px rgba(245, 158, 11, 0.6);
+}
+
+#sdg-floating-bubble:active {
+  cursor: grabbing;
+  transform: scale(0.96);
+}
+
+.sdg-bubble-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sdg-bubble-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+}
+
+.sdg-bubble-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #10b981;
+  color: #0f172a;
+  font-size: 11px;
+  font-weight: 900;
+  font-family: system-ui, -apple-system, sans-serif;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  border: 2px solid #0f172a;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+}
+
+.sdg-bubble-pulse {
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid #f59e0b;
+  opacity: 0;
+  animation: sdgPulse 2.5s infinite;
+  pointer-events: none;
+}
+
+@keyframes sdgPulse {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.25); opacity: 0; }
+  100% { transform: scale(1.25); opacity: 0; }
+}
+
+/* Painel Lateral / Drawer */
+#sdg-drawer-panel {
+  position: fixed;
+  top: 0;
+  right: -450px;
+  width: 440px;
+  max-width: 95vw;
+  height: 100vh;
+  background: #0f172a;
+  color: #f8fafc;
+  border-left: 1px solid #334155;
+  box-shadow: -10px 0 40px rgba(0, 0, 0, 0.7);
+  z-index: 1000000;
+  display: flex;
+  flex-direction: column;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  transition: right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+}
+
+#sdg-drawer-panel * {
+  box-sizing: border-box;
+}
+
+#sdg-drawer-panel.open {
+  right: 0;
+}
+
+/* Header do Painel */
+.sdg-header {
+  padding: 14px 18px;
+  background: #090d16;
+  border-bottom: 1px solid #1e293b;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sdg-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sdg-header-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid #f59e0b;
+}
+
+.sdg-header-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: #f8fafc;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.sdg-header-subtitle {
+  font-size: 10px;
+  font-weight: 700;
+  color: #f59e0b;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.sdg-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sdg-btn-icon {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: all 0.15s;
+}
+
+.sdg-btn-icon:hover {
+  background: #334155;
+  color: #ffffff;
+}
+
+/* Abas */
+.sdg-tabs {
+  display: flex;
+  background: #090d16;
+  border-bottom: 1px solid #1e293b;
+  padding: 0 10px;
+  gap: 4px;
+}
+
+.sdg-tab-btn {
+  flex: 1;
+  padding: 10px 6px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.sdg-tab-btn:hover {
+  color: #f8fafc;
+}
+
+.sdg-tab-btn.active {
+  color: #f59e0b;
+  border-bottom-color: #f59e0b;
+}
+
+/* Corpo / Conteúdo das Abas */
+.sdg-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sdg-tab-content {
+  display: none;
+}
+
+.sdg-tab-content.active {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Seções e Cards */
+.sdg-card {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sdg-card-title {
+  font-size: 11px;
+  font-weight: 800;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Campos de Formulário */
+.sdg-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sdg-label {
+  font-size: 10px;
+  font-weight: 800;
+  color: #94a3b8;
+  text-transform: uppercase;
+}
+
+.sdg-input, .sdg-select, .sdg-textarea {
+  width: 100%;
+  background: #090d16;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #f8fafc;
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.sdg-input:focus, .sdg-select:focus, .sdg-textarea:focus {
+  border-color: #f59e0b;
+}
+
+.sdg-input::placeholder, .sdg-textarea::placeholder {
+  color: #475569;
+}
+
+.sdg-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.sdg-row-3 {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 8px;
+}
+
+/* Badge de Cliente */
+.sdg-customer-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #34d399;
+}
+
+.sdg-customer-badge.new {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #60a5fa;
+}
+
+/* Chips Rápidos de Cardápio */
+.sdg-quick-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 90px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.sdg-chip {
+  background: #090d16;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #f8fafc;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sdg-chip:hover {
+  background: #f59e0b;
+  color: #090d16;
+  border-color: #f59e0b;
+}
+
+.sdg-chip-price {
+  color: #f59e0b;
+  font-weight: 800;
+}
+
+.sdg-chip:hover .sdg-chip-price {
+  color: #090d16;
+}
+
+/* Lista de Itens do Pedido */
+.sdg-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.sdg-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #090d16;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 11px;
+}
+
+.sdg-item-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.sdg-item-name {
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.sdg-item-sub {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.sdg-item-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sdg-btn-qty {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #f8fafc;
+  font-weight: 900;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+
+.sdg-btn-qty:hover {
+  background: #334155;
+}
+
+.sdg-item-qty {
+  font-weight: 800;
+  font-size: 11px;
+  min-width: 14px;
+  text-align: center;
+}
+
+.sdg-item-total {
+  font-weight: 800;
+  color: #10b981;
+  min-width: 60px;
+  text-align: right;
+}
+
+.sdg-btn-del {
+  background: transparent;
+  border: none;
+  color: #ef4444;
+  cursor: pointer;
+  padding: 4px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+}
+
+.sdg-btn-del:hover {
+  color: #f87171;
+}
+
+/* Footer / Totais e Botão de Lançar */
+.sdg-footer {
+  padding: 14px 18px;
+  background: #090d16;
+  border-top: 1px solid #1e293b;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sdg-totals-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.sdg-grand-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-top: 1px dashed #334155;
+  padding-top: 8px;
+}
+
+.sdg-grand-total-label {
+  font-size: 13px;
+  font-weight: 800;
+  color: #f8fafc;
+  text-transform: uppercase;
+}
+
+.sdg-grand-total-val {
+  font-size: 20px;
+  font-weight: 900;
+  color: #10b981;
+}
+
+.sdg-btn-primary {
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: #090d16;
+  border: none;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s;
+  box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
+}
+
+.sdg-btn-primary:hover {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4);
+  transform: translateY(-1px);
+}
+
+.sdg-btn-primary:active {
+  transform: translateY(1px);
+}
+
+.sdg-btn-secondary {
+  width: 100%;
+  padding: 8px;
+  background: #1e293b;
+  color: #cbd5e1;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.15s;
+}
+
+.sdg-btn-secondary:hover {
+  background: #334155;
+  color: #ffffff;
+}
+
+/* Modal de Confirmação & Resumo */
+.sdg-success-box {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: sdgFadeIn 0.2s ease-out;
+}
+
+@keyframes sdgFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.sdg-success-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #34d399;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+
+.sdg-success-msg {
+  font-size: 11px;
+  color: #cbd5e1;
+  line-height: 1.4;
+  margin: 0;
+}
+
+/* Anotações do dia */
+.sdg-orders-history {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 480px;
+  overflow-y: auto;
+}
+
+.sdg-history-card {
+  background: #090d16;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sdg-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.sdg-history-status {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.sdg-history-status.confirmed {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+}
+
+.sdg-history-status.waiting {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+}
+
+.sdg-history-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.sdg-history-btn {
+  flex: 1;
+  padding: 5px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #cbd5e1;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+}
+
+.sdg-history-btn:hover {
+  background: #334155;
+  color: #fff;
+}

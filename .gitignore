@@ -1,0 +1,70 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependencies
+node_modules
+**/node_modules/
+
+# Build and production outputs
+dist
+dist-ssr
+**/dist/
+build
+**/build/
+.vercel
+
+# Environment variables & Local secrets (crucial to prevent leaks)
+.env
+.env.*
+*.local
+**/.env
+**/.env.*
+**/*.local
+!.env.example
+!**/.env.example
+
+# Temporary and cache files
+*.tmp
+*.temp
+test-out.js
+printer_out.txt
+supabase/.temp
+
+# IDE, Editor and Agent tooling
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.antigravity
+**/.antigravity/
+.claude
+**/.claude/
+
+# Mobile (Expo / React Native)
+.expo/
+**/.expo/
+web-build/
+**/web-build/
+expo-env.d.ts
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+.kotlin/
+.metro-health-check*
+*.tsbuildinfo
+sdg-motoboy-app/ios
+sdg-motoboy-app/android

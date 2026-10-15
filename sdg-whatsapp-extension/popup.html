@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>SDG Delivery - Lançador Rápido</title>
+  <link rel="stylesheet" href="content.css">
+  <style>
+    body {
+      width: 420px;
+      min-height: 580px;
+      max-height: 600px;
+      margin: 0;
+      padding: 0;
+      background: #0f172a;
+      overflow-x: hidden;
+      overflow-y: auto;
+    }
+    #sdg-popup-root {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+    /* Adapta estilos para o popup da toolbar */
+    .sdg-header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .sdg-footer {
+      position: sticky;
+      bottom: 0;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <div id="sdg-popup-root">
+    <!-- Header -->
+    <div class="sdg-header">
+      <div class="sdg-header-brand">
+        <svg class="sdg-header-logo" viewBox="0 0 128 128">
+          <circle cx="64" cy="64" r="58" fill="#0f172a" stroke="#f59e0b" stroke-width="6"/>
+          <path d="M36 50 C36 36, 76 36, 76 50 Z" fill="#f59e0b"/>
+          <rect x="34" y="58" width="44" height="8" rx="4" fill="#78350f"/>
+          <path d="M33 66 L79 66 L77 70 L63 74 L61 70 L47 73 L35 70 Z" fill="#fbbf24"/>
+          <path d="M36 72 L76 72 C76 80, 36 80, 36 72 Z" fill="#f59e0b"/>
+          <text x="64" y="98" font-family="system-ui" font-weight="900" font-size="18" fill="#fbbf24" text-anchor="middle">SDG</text>
+        </svg>
+        <div>
+          <h2 class="sdg-header-title">SDG Delivery & Balcão</h2>
+          <span class="sdg-header-subtitle">Lançador de Pedidos</span>
+        </div>
+      </div>
+      <div class="sdg-header-actions">
+        <button type="button" class="sdg-btn-icon" id="sdg-btn-refresh-catalog" title="Atualizar Cardápio">🔄</button>
+      </div>
+    </div>
+
+    <!-- Abas -->
+    <div class="sdg-tabs">
+      <button type="button" class="sdg-tab-btn active" data-tab="order">⚡ Pedido</button>
+      <button type="button" class="sdg-tab-btn" data-tab="paste">🪄 Colar Zap</button>
+      <button type="button" class="sdg-tab-btn" data-tab="history">📋 Caixa (<span id="sdg-tab-orders-count">0</span>)</button>
+      <button type="button" class="sdg-tab-btn" data-tab="settings">⚙️ Ajustes</button>
+    </div>
+
+    <!-- Corpo -->
+    <div class="sdg-body">
+      
+      <!-- ABA 1: PEDIDO -->
+      <div class="sdg-tab-content active" id="sdg-tab-order">
+        <div class="sdg-card">
+          <div class="sdg-card-title">
+            <span>👤 Cliente & Entrega</span>
+          </div>
+
+          <div class="sdg-row-2">
+            <div class="sdg-form-group">
+              <label class="sdg-label">WhatsApp *</label>
+              <input type="text" class="sdg-input" id="sdg-input-phone" placeholder="(11) 98765-4321">
+            </div>
+            <div class="sdg-form-group">
+              <label class="sdg-label">Nome</label>
+              <input type="text" class="sdg-input" id="sdg-input-name" placeholder="Ex: João">
+            </div>
+          </div>
+
+          <div id="sdg-customer-status-badge" style="display: none;"></div>
+
+          <div class="sdg-row-2">
+            <div class="sdg-form-group">
+              <label class="sdg-label">Tipo *</label>
+              <select class="sdg-select" id="sdg-select-delivery-type">
+                <option value="delivery">🛵 Delivery (Motoboy)</option>
+                <option value="takeout">🏬 Balcão (Retirada)</option>
+                <option value="dine_in">🍽️ Mesa / Salão</option>
+              </select>
+            </div>
+            <div class="sdg-form-group" id="sdg-group-fee">
+              <label class="sdg-label">Taxa (R$)</label>
+              <input type="number" step="0.50" class="sdg-input" id="sdg-input-fee" value="5.00">
+            </div>
+          </div>
+
+          <div class="sdg-form-group" id="sdg-group-address">
+            <label class="sdg-label">Endereço de Entrega *</label>
+            <input type="text" class="sdg-input" id="sdg-input-address" placeholder="Rua, Número, Bairro">
+          </div>
+        </div>
+
+        <!-- Itens -->
+        <div class="sdg-card">
+          <div class="sdg-card-title">
+            <span>🍔 Itens</span>
+            <span style="font-size: 10px; color: #f59e0b;">Clique para somar</span>
+          </div>
+
+          <div class="sdg-quick-chips" id="sdg-quick-chips-container">
+            <span style="font-size: 10px; color: #64748b;">Carregando...</span>
+          </div>
+
+          <div class="sdg-row-3" style="margin-top: 4px;">
+            <input type="text" class="sdg-input" id="sdg-input-item-name" placeholder="Nome item">
+            <input type="number" class="sdg-input" id="sdg-input-item-qty" value="1" min="1" placeholder="Qtd">
+            <input type="number" step="0.50" class="sdg-input" id="sdg-input-item-price" placeholder="R$">
+          </div>
+          <button type="button" class="sdg-btn-secondary" id="sdg-btn-add-item">
+            ➕ Adicionar Item
+          </button>
+
+          <div class="sdg-items-list" id="sdg-items-list-container">
+            <div style="text-align: center; padding: 8px; color: #64748b; font-size: 11px;">
+              Nenhum item adicionado ainda.
+            </div>
+          </div>
+        </div>
+
+        <!-- Pagamento -->
+        <div class="sdg-card">
+          <div class="sdg-card-title">
+            <span>💳 Pagamento</span>
+          </div>
+          <div class="sdg-row-2">
+            <div class="sdg-form-group">
+              <label class="sdg-label">Forma</label>
+              <select class="sdg-select" id="sdg-select-payment">
+                <option value="pix">⚡ Pix</option>
+                <option value="cash">💵 Dinheiro</option>
+                <option value="credit_card">💳 Cartão Crédito</option>
+                <option value="credit_card">💳 Cartão Débito</option>
+              </select>
+            </div>
+            <div class="sdg-form-group" id="sdg-group-troco" style="display: none;">
+              <label class="sdg-label">Troco para</label>
+              <input type="number" class="sdg-input" id="sdg-input-troco" placeholder="R$ 50">
+            </div>
+          </div>
+          <div class="sdg-form-group">
+            <label class="sdg-label">Observação</label>
+            <input type="text" class="sdg-input" id="sdg-input-obs" placeholder="Ex: Sem salada">
+          </div>
+        </div>
+
+        <div id="sdg-order-success-box" style="display: none;"></div>
+      </div>
+
+      <!-- ABA 2: COLAR -->
+      <div class="sdg-tab-content" id="sdg-tab-paste">
+        <div class="sdg-card">
+          <div class="sdg-card-title">
+            <span>🪄 Copiar e Colar Mensagem</span>
+          </div>
+          <textarea class="sdg-textarea" id="sdg-textarea-paste" rows="8" placeholder="Cole o texto do cliente aqui..."></textarea>
+          <button type="button" class="sdg-btn-primary" id="sdg-btn-parse-paste">
+            🪄 Processar e Preencher Pedido
+          </button>
+        </div>
+      </div>
+
+      <!-- ABA 3: HISTÓRICO / CAIXA -->
+      <div class="sdg-tab-content" id="sdg-tab-history">
+        <div class="sdg-card">
+          <div class="sdg-card-title">
+            <span>📊 Fechamento WhatsApp Hoje</span>
+            <button type="button" class="sdg-btn-secondary" id="sdg-btn-refresh-history" style="width: auto; padding: 2px 6px; font-size: 10px;">
+              🔄 Atualizar
+            </button>
+          </div>
+          <div class="sdg-row-2">
+            <div style="background: #090d16; padding: 8px; border-radius: 8px; text-align: center;">
+              <span style="font-size: 10px; color: #94a3b8; font-weight: 800; display: block;">PEDIDOS</span>
+              <span style="font-size: 18px; font-weight: 900; color: #f59e0b;" id="sdg-stat-count">0</span>
+            </div>
+            <div style="background: #090d16; padding: 8px; border-radius: 8px; text-align: center;">
+              <span style="font-size: 10px; color: #94a3b8; font-weight: 800; display: block;">FATURADO</span>
+              <span style="font-size: 18px; font-weight: 900; color: #10b981;" id="sdg-stat-total">R$ 0,00</span>
+            </div>
+          </div>
+        </div>
+        <div class="sdg-card">
+          <div class="sdg-card-title">
+            <span>📋 Pedidos do Dia</span>
+          </div>
+          <div class="sdg-orders-history" id="sdg-history-list"></div>
+        </div>
+      </div>
+
+      <!-- ABA 4: AJUSTES -->
+      <div class="sdg-tab-content" id="sdg-tab-settings">
+        <div class="sdg-card">
+          <div class="sdg-card-title">
+            <span>⚙️ Configurações</span>
+          </div>
+          <div class="sdg-form-group">
+            <label class="sdg-label">Supabase URL</label>
+            <input type="text" class="sdg-input" id="sdg-setting-url">
+          </div>
+          <div class="sdg-form-group">
+            <label class="sdg-label">Supabase Anon Key</label>
+            <input type="text" class="sdg-input" id="sdg-setting-key">
+          </div>
+          <div class="sdg-row-2">
+            <div class="sdg-form-group">
+              <label class="sdg-label">IP Elgin i8</label>
+              <input type="text" class="sdg-input" id="sdg-setting-printer-ip">
+            </div>
+            <div class="sdg-form-group">
+              <label class="sdg-label">Porta</label>
+              <input type="number" class="sdg-input" id="sdg-setting-printer-port">
+            </div>
+          </div>
+          <div class="sdg-row-2" style="margin-top: 6px;">
+            <button type="button" class="sdg-btn-secondary" id="sdg-btn-test-printer">
+              🖨️ Testar Elgin
+            </button>
+            <button type="button" class="sdg-btn-primary" id="sdg-btn-save-settings">
+              💾 Salvar
+            </button>
+          </div>
+          <div id="sdg-settings-feedback" style="font-size: 11px; text-align: center;"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="sdg-footer" id="sdg-footer-section">
+      <div class="sdg-totals-row">
+        <span>Subtotal Itens:</span>
+        <span id="sdg-subtotal-val" style="font-weight: 700; color: #f8fafc;">R$ 0,00</span>
+      </div>
+      <div class="sdg-totals-row" id="sdg-fee-row">
+        <span>Taxa de Entrega:</span>
+        <span id="sdg-fee-val" style="font-weight: 700; color: #f8fafc;">R$ 5,00</span>
+      </div>
+      <div class="sdg-grand-total">
+        <span class="sdg-grand-total-label">TOTAL GERAL:</span>
+        <span class="sdg-grand-total-val" id="sdg-grand-total-val">R$ 0,00</span>
+      </div>
+
+      <button type="button" class="sdg-btn-primary" id="sdg-btn-launch-order">
+        🚀 Lançar Pedido & Imprimir Cozinha
+      </button>
+      <button type="button" class="sdg-btn-secondary" id="sdg-btn-launch-waiting">
+        ⏳ Lançar como Aguardando Pagamento
+      </button>
+    </div>
+  </div>
+
+  <script src="shared.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+{
+  "manifest_version": 3,
+  "name": "SDG Delivery - Lançador Rápido WhatsApp & Balcão",
+  "version": "1.0.0",
+  "description": "Bolinha flutuante no WhatsApp Web para lançamento rápido de pedidos, busca automática de clientes/endereços, impressão na cozinha e fechamento de caixa sem senha.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "SDG Delivery - Lançar Pedido Balcão/WhatsApp",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://web.whatsapp.com/*",
+    "https://*.supabase.co/*",
+    "http://localhost:3001/*",
+    "http://127.0.0.1:3001/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://web.whatsapp.com/*"
+      ],
+      "js": [
+        "shared.js",
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
+      "run_at": "document_end"
+    }
+  ]
+}
