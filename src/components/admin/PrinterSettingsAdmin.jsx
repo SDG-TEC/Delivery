@@ -42,7 +42,12 @@ export const PrinterSettingsAdmin = () => {
       const res = await fetchInstalledPrinters(formData.serviceUrl);
       if (res && res.success && Array.isArray(res.printers)) {
         setInstalledPrinters(res.printers);
-        if (res.defaultPrinter) setDefaultPrinter(res.defaultPrinter);
+        if (res.defaultPrinter) {
+          setDefaultPrinter(res.defaultPrinter);
+          try {
+            localStorage.setItem('sdg_default_os_printer', res.defaultPrinter);
+          } catch (e) {}
+        }
         if (res.networkPrinters?.length > 0) {
           const firstNet = res.networkPrinters[0];
           setFormData(prev => ({
@@ -64,8 +69,9 @@ export const PrinterSettingsAdmin = () => {
   }, []);
 
   const availableDrivers = PrinterManager.getDrivers();
-  const detectedDriver = PrinterManager.detectBestDriver(formData.printerName, formData);
-  const activeDriver = PrinterManager.resolveDriver(formData);
+  const effectivePrinterName = formData.printerName || defaultPrinter;
+  const detectedDriver = PrinterManager.detectBestDriver(effectivePrinterName, formData);
+  const activeDriver = PrinterManager.resolveDriver({ ...formData, printerName: effectivePrinterName });
 
   const handleChange = (field, val) => {
     setFormData(prev => {

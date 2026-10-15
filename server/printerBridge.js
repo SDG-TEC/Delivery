@@ -5,7 +5,7 @@
 // ==============================================================================
 
 import net from 'net';
-import { exec } from 'child_process';
+import { exec, execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -16,6 +16,22 @@ const __dirname = path.dirname(__filename);
 
 const DEFAULT_PRINTER_IP = process.env.PRINTER_IP || '192.168.1.100';
 const DEFAULT_PRINTER_PORT = process.env.PRINTER_PORT || 9100;
+
+/**
+ * Obtém o nome da impressora padrão do sistema operacional de forma síncrona
+ */
+export function getDefaultPrinterNameSync() {
+  if (process.platform === 'win32') {
+    return '';
+  }
+  try {
+    const out = execSync('lpstat -d 2>/dev/null', { encoding: 'utf-8', timeout: 2000 });
+    const match = out.match(/:\s*(.+)$/m);
+    return match && match[1] ? match[1].trim() : '';
+  } catch {
+    return '';
+  }
+}
 
 /**
  * Faz varredura na rede local em busca de impressoras térmicas na porta 9100 (ESC/POS RAW)
@@ -182,11 +198,15 @@ export function checkPrinterOnline(printerName = '') {
  * Detecta se a impressora é de escritório (Epson EcoTank, HP, Canon, Brother, etc.)
  */
 export function isOfficePrinter(name = '') {
-  const n = (name || '').toLowerCase();
+  let n = (name || '').toLowerCase();
+  if (!n) {
+    const def = getDefaultPrinterNameSync().toLowerCase();
+    n = def;
+  }
   return n.includes('l3250') || n.includes('l3150') || n.includes('l4260') || n.includes('l6270') ||
          n.includes('ecotank') || n.includes('epson_l') || n.includes('epson l') ||
          n.includes('deskjet') || n.includes('laserjet') || n.includes('smart tank') ||
-         n.includes('canon') || n.includes('brother') || n.includes('hp');
+         n.includes('canon') || n.includes('brother') || n.includes('hp') || n.includes('pdf');
 }
 
 /**
@@ -210,7 +230,9 @@ export function sendToDefaultOsPrinter(rawEscpos, printerName = '', options = {}
       return reject(new Error('Nenhum comando fornecido para impressão.'));
     }
 
-    const isOffice = options.isOffice || isOfficePrinter(printerName);
+    const defaultOsPrinter = getDefaultPrinterNameSync();
+    const resolvedPrinter = printerName && printerName.trim() ? printerName.trim() : defaultOsPrinter;
+    const isOffice = options.isOffice !== undefined ? options.isOffice : isOfficePrinter(resolvedPrinter);
     const ext = isOffice ? 'txt' : 'bin';
     const tempFile = path.join(os.tmpdir(), `sdg_ticket_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`);
 
@@ -282,8 +304,8 @@ export function sendToDefaultOsPrinter(rawEscpos, printerName = '', options = {}
       }
     } else {
       // No macOS / Linux: para impressoras térmicas usa -l (raw). Para impressoras de escritório A4, não usa -l para permitir filtros PPD
-      const printerParam = printerName && printerName.trim()
-        ? `-P "${printerName.trim()}" `
+      const printerParam = resolvedPrinter
+        ? `-P "${resolvedPrinter}" `
         : '';
       const rawFlag = isOffice ? '' : '-l ';
       const cmd = `lpr ${printerParam}${rawFlag}"${tempFile}"`;
@@ -293,15 +315,15 @@ export function sendToDefaultOsPrinter(rawEscpos, printerName = '', options = {}
 
         if (err) {
           console.error('[Printer] Erro no comando lpr do Mac/Linux:', stderr || err.message);
-          return reject(new Error(`Erro ao enviar para impressora "${printerName || 'padrão'}": ${stderr || err.message}`));
+          return reject(new Error(`Erro ao enviar para impressora "${resolvedPrinter || 'padrão'}": ${stderr || err.message}`));
         }
 
         resolve({
           success: true,
           bytesWritten: buffer.length,
           via: isOffice ? 'os_cups_office' : 'os_default_printer_unix',
-          printer: printerName || 'Padrão',
-          message: `Cupom impresso com sucesso na impressora "${printerName || 'Padrão'}"!`
+          printer: resolvedPrinter || 'Padrão',
+          message: `Cupom impresso com sucesso na impressora "${resolvedPrinter || 'Padrão'}"!`
         });
       });
     }
@@ -516,14 +538,15 @@ export async function handlePrinterRoute(req, res) {
       const printerName = body.printerName || '';
       const isOffice = body.isOffice !== undefined ? body.isOffice : isOfficePrinter(printerName);
       let payload = body.rawEscpos;
-      if (!payload) {
-        if (isOffice) {
+      if (isOffice) {
+        if (!payload || payload.includes('\x1B') || payload.includes('\x1D')) {
+          const resolvedName = printerName || getDefaultPrinterNameSync() || 'PADRAO DO SISTEMA';
           payload = [
             '====================================================',
             '                 SDG RESTAURANTE',
             '====================================================',
             'TESTE DE IMPRESSAO DIRETA (CUPS LINUX)',
-            `IMPRESSORA: ${printerName || 'PADRAO DO SISTEMA'}`,
+            `IMPRESSORA: ${resolvedName}`,
             `DATA/HORA:  ${new Date().toLocaleString('pt-BR')}`,
             'STATUS:     COMUNICACAO 100% OPERACIONAL',
             'SISTEMA:    SDG Delivery & Gestao de Cozinha (KDS)',
@@ -534,8 +557,10 @@ export async function handlePrinterRoute(req, res) {
             '\n\n'
           ].join('\n');
         } else {
-          payload = '\x1B@\x1Ba\x01\x1B!\x11SDG RESTAURANTE\x1B!\x00\nTESTE DE IMPRESSAO\nIMPRESSORA: ' + (printerName || 'PADRAO DO SISTEMA') + '\nCONEXAO COM SUCESSO!\n\n\n\n\x1DV\x00';
+          payload = stripEscposCodes(payload);
         }
+      } else if (!payload) {
+        payload = '\x1B@\x1Ba\x01\x1B!\x11SDG RESTAURANTE\x1B!\x00\nTESTE DE IMPRESSAO\nIMPRESSORA: ' + (printerName || 'PADRAO DO SISTEMA') + '\nCONEXAO COM SUCESSO!\n\n\n\n\x1DV\x00';
       }
 
       const printRes = isOffice

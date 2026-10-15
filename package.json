@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --host",
     "printer": "node.exe printer-server.js",
+    "bridge": "node server/supabasePrinterBridge.js",
     "app:motoboy": "npm --prefix sdg-motoboy-app start",
     "build": "vite build",
     "preview": "vite preview"

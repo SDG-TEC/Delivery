@@ -89,7 +89,12 @@ class PrinterManagerClass {
     }
 
     // Detecção automática inteligente baseada no nome do dispositivo / IP
-    const printerName = settings.printerName || '';
+    let printerName = settings.printerName || '';
+    if (!printerName && typeof window !== 'undefined') {
+      try {
+        printerName = localStorage.getItem('sdg_default_os_printer') || '';
+      } catch (e) {}
+    }
     return this.detectBestDriver(printerName, settings);
   }
 

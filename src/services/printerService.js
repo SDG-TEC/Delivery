@@ -194,6 +194,9 @@ export function testPrinterStatusViaCloud(settings = null, timeoutMs = 3500) {
 export function sendEscposViaCloud({ rawEscpos, tickets = null, type = 'counter', orderId = '', cfg, timeoutMs = 15000 }) {
   const ip = cfg?.ip || DEFAULT_PRINTER_SETTINGS.ip;
   const port = cfg?.port || 9100;
+  const driver = PrinterManager.resolveDriver(cfg);
+  const isOffice = (cfg?.driverId === 'a4_office' || cfg?.paperWidth === 'A4' || driver.category === 'office');
+  const printerName = cfg?.printerName || '';
   const channel = getPrinterRelayChannel();
 
   if (!channel) {
@@ -213,7 +216,7 @@ export function sendEscposViaCloud({ rawEscpos, tickets = null, type = 'counter'
         resolved = true;
         resolve({
           success: false,
-          error: 'Tempo esgotado aguardando impressão no computador da loja. Verifique se o iniciar-impressora.bat está aberto.',
+          error: 'Tempo esgotado aguardando impressão no computador da loja. Verifique se a ponte de impressão está em execução.',
           fallbackToBrowser: true
         });
       }
@@ -228,7 +231,7 @@ export function sendEscposViaCloud({ rawEscpos, tickets = null, type = 'counter'
             success: true,
             endpoint: 'cloud_relay',
             via: 'cloud_relay',
-            message: payload.message || `Impresso com sucesso na Elgin i8 (${ip}) via Nuvem!`
+            message: payload.message || `Impresso com sucesso na impressora "${payload.printer || printerName || 'Padrão'}" via Nuvem!`
           });
         } else {
           resolve({
@@ -249,6 +252,8 @@ export function sendEscposViaCloud({ rawEscpos, tickets = null, type = 'counter'
         jobId,
         ip,
         port,
+        printerName,
+        isOffice,
         type,
         orderId,
         rawEscpos,
@@ -276,7 +281,16 @@ export function printTestViaCloud(settings = null, timeoutMs = 8000) {
   const cfg = settings || getPrinterSettings();
   const ip = cfg.ip || DEFAULT_PRINTER_SETTINGS.ip;
   const port = cfg.port || 9100;
-  const rawEscpos = buildTestEscpos(ip, port);
+  const driver = PrinterManager.resolveDriver(cfg);
+  const isOffice = (cfg.driverId === 'a4_office' || cfg.paperWidth === 'A4' || driver.category === 'office');
+  const printerName = cfg.printerName || '';
+  const rawEscpos = isOffice
+    ? ''
+    : buildTestEscpos({
+        paperWidth: cfg.paperWidth || '80mm',
+        cutMode: cfg.cutMode || 'full',
+        printerName: printerName || 'Impressora Padrão'
+      });
   const channel = getPrinterRelayChannel();
 
   if (!channel) {
@@ -295,7 +309,7 @@ export function printTestViaCloud(settings = null, timeoutMs = 8000) {
         resolved = true;
         resolve({
           success: false,
-          error: 'Tempo esgotado aguardando resposta da Elgin i8 no computador da loja.'
+          error: 'Tempo esgotado aguardando resposta da impressora no computador da loja.'
         });
       }
     }, timeoutMs);
@@ -308,7 +322,7 @@ export function printTestViaCloud(settings = null, timeoutMs = 8000) {
           resolve({
             success: true,
             via: 'cloud_relay',
-            message: payload.message || `Teste impresso com sucesso na Elgin i8 (${ip}:${port}) via Nuvem!`
+            message: payload.message || `Teste impresso com sucesso na impressora "${payload.printer || printerName || 'Padrão'}" via Nuvem!`
           });
         } else {
           resolve({
@@ -324,7 +338,7 @@ export function printTestViaCloud(settings = null, timeoutMs = 8000) {
     channel.send({
       type: 'broadcast',
       event: 'printer_test_request',
-      payload: { jobId, ip, port, rawEscpos, timestamp: Date.now() }
+      payload: { jobId, ip, port, printerName, isOffice, rawEscpos, timestamp: Date.now() }
     }).catch(err => {
       if (!resolved) {
         resolved = true;

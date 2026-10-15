@@ -1,7 +1,29 @@
-// ==============================================================================
-// ☁️ Ponte de Impressão em Nuvem via Supabase Realtime (Vercel -> PC Local -> Elgin i8)
-// Permite que o sistema na Vercel (HTTPS) envie impressões para a impressora na rede local (192.168.1.150:9100)
-// ==============================================================================
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Carrega .env / .env.local automaticamente em ambiente Node puro
+function loadEnvFile() {
+  if (process.env.VITE_SUPABASE_URL) return;
+  const candidates = ['.env.local', '.env'];
+  for (const filename of candidates) {
+    const fullPath = path.resolve(process.cwd(), filename);
+    if (fs.existsSync(fullPath)) {
+      try {
+        const text = fs.readFileSync(fullPath, 'utf-8');
+        for (const line of text.split('\n')) {
+          const m = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+          if (m) {
+            const k = m[1];
+            const v = (m[2] || '').trim().replace(/^['"]|['"]$/g, '');
+            if (!process.env[k]) process.env[k] = v;
+          }
+        }
+      } catch (e) {}
+    }
+  }
+}
+loadEnvFile();
 
 import { getSupabaseClient } from '../src/services/supabase.js';
 import {
@@ -9,7 +31,9 @@ import {
   sendRawToPrinter,
   getInstalledPrinters,
   sendToDefaultOsPrinter,
-  isOfficePrinter
+  isOfficePrinter,
+  getDefaultPrinterNameSync,
+  stripEscposCodes
 } from './printerBridge.js';
 
 export const PRINTER_CHANNEL_NAME = 'sdg-printer-bridge';
@@ -87,12 +111,13 @@ export function startSupabasePrinterListener({
     const port = Number(payload?.port) || defaultPort;
     const printerName = payload?.printerName || '';
     const rawEscpos = payload?.rawEscpos;
-    const isOffice = payload?.isOffice !== undefined ? payload.isOffice : isOfficePrinter(printerName);
+    const resolvedPrinter = printerName || getDefaultPrinterNameSync();
+    const isOffice = payload?.isOffice !== undefined ? payload.isOffice : isOfficePrinter(resolvedPrinter);
     const tickets = Array.isArray(payload?.tickets) && payload.tickets.length > 0
       ? payload.tickets
       : (rawEscpos ? [rawEscpos] : []);
 
-    console.log(`🖨️ [NUVEM] Pedido de impressão recebido da Vercel (${tickets.length} cupom) para ${printerName || `${ip}:${port}`}`);
+    console.log(`🖨️ [NUVEM] Pedido de impressão recebido da Vercel (${tickets.length} cupom) para ${resolvedPrinter || `${ip}:${port}`}`);
 
     if (tickets.length === 0) {
       await channel.send({
@@ -109,17 +134,21 @@ export function startSupabasePrinterListener({
     }
 
     try {
-      const combinedPayload = tickets
+      let combinedPayload = tickets
         .map(t => (typeof t === 'object' && t.rawEscpos ? t.rawEscpos : t))
         .join('');
 
+      if (isOffice) {
+        combinedPayload = stripEscposCodes(combinedPayload);
+      }
+
       const res = isOffice
-        ? await sendToDefaultOsPrinter(combinedPayload, printerName, { isOffice: true })
-        : await sendRawToPrinter(combinedPayload, ip, port, printerName);
+        ? await sendToDefaultOsPrinter(combinedPayload, resolvedPrinter, { isOffice: true })
+        : await sendRawToPrinter(combinedPayload, ip, port, resolvedPrinter);
 
       const totalBytes = res.bytesWritten || 0;
 
-      console.log(`✅ [NUVEM] Impressão concluída com sucesso na ${printerName || 'impressora padrão'} (${totalBytes} bytes)!`);
+      console.log(`✅ [NUVEM] Impressão concluída com sucesso na ${res.printer || resolvedPrinter || 'impressora padrão'} (${totalBytes} bytes)!`);
 
       await channel.send({
         type: 'broadcast',
@@ -129,10 +158,10 @@ export function startSupabasePrinterListener({
           success: true,
           ticketsCount: tickets.length,
           bytesWritten: totalBytes,
-          printer: res.printer || printerName || 'Padrão',
+          printer: res.printer || resolvedPrinter || 'Padrão',
           message: tickets.length > 1
-            ? `2 Vias impressas na impressora "${res.printer || printerName || 'Padrão'}"!`
-            : `Cupom impresso na impressora "${res.printer || printerName || 'Padrão'}"!`,
+            ? `2 Vias impressas na impressora "${res.printer || resolvedPrinter || 'Padrão'}"!`
+            : `Cupom impresso na impressora "${res.printer || resolvedPrinter || 'Padrão'}"!`,
           timestamp: Date.now()
         }
       });
@@ -145,7 +174,7 @@ export function startSupabasePrinterListener({
           jobId,
           success: false,
           error: err.message,
-          printer: printerName,
+          printer: resolvedPrinter,
           timestamp: Date.now()
         }
       });
@@ -158,19 +187,20 @@ export function startSupabasePrinterListener({
     const ip = payload?.ip || defaultIp;
     const port = Number(payload?.port) || defaultPort;
     const printerName = payload?.printerName || '';
-    const isOffice = payload?.isOffice !== undefined ? payload.isOffice : isOfficePrinter(printerName);
+    const resolvedPrinter = printerName || getDefaultPrinterNameSync();
+    const isOffice = payload?.isOffice !== undefined ? payload.isOffice : isOfficePrinter(resolvedPrinter);
 
-    console.log(`🧪 [NUVEM] Teste de impressão recebido da Vercel para ${printerName || `${ip}:${port}`}`);
+    console.log(`🧪 [NUVEM] Teste de impressão recebido da Vercel para ${resolvedPrinter || `${ip}:${port}`}`);
 
     let testContent = payload?.rawEscpos;
-    if (!testContent) {
-      if (isOffice) {
+    if (isOffice) {
+      if (!testContent || testContent.includes('\x1B') || testContent.includes('\x1D')) {
         testContent = [
           '====================================================',
           '                 SDG RESTAURANTE',
           '====================================================',
           'TESTE DE IMPRESSAO VIA NUVEM (VERCEL -> CUPS LINUX)',
-          `IMPRESSORA: ${printerName || 'EPSON EcoTank L3250'}`,
+          `IMPRESSORA: ${resolvedPrinter || 'EPSON EcoTank L3250'}`,
           `DATA/HORA:  ${new Date().toLocaleString('pt-BR')}`,
           'STATUS:     COMUNICACAO VIA NUVEM COM SUCESSO!',
           'SISTEMA:    SDG Delivery & Gestao de Cozinha (KDS)',
@@ -178,14 +208,16 @@ export function startSupabasePrinterListener({
           '\n\n'
         ].join('\n');
       } else {
-        testContent = '\x1B@\x1Ba\x01SDG RESTAURANTE\nTESTE DE IMPRESSAO VIA VERCEL\nCONEXAO COM SUCESSO!\n\n\n\n\x1DV\x00';
+        testContent = stripEscposCodes(testContent);
       }
+    } else if (!testContent) {
+      testContent = '\x1B@\x1Ba\x01SDG RESTAURANTE\nTESTE DE IMPRESSAO VIA VERCEL\nCONEXAO COM SUCESSO!\n\n\n\n\x1DV\x00';
     }
 
     try {
       const res = isOffice
-        ? await sendToDefaultOsPrinter(testContent, printerName, { isOffice: true })
-        : await sendRawToPrinter(testContent, ip, port, printerName);
+        ? await sendToDefaultOsPrinter(testContent, resolvedPrinter, { isOffice: true })
+        : await sendRawToPrinter(testContent, ip, port, resolvedPrinter);
 
       console.log(`✅ [NUVEM] Teste impresso com sucesso!`);
       await channel.send({
@@ -195,8 +227,8 @@ export function startSupabasePrinterListener({
           jobId,
           success: true,
           bytesWritten: res.bytesWritten,
-          printer: res.printer || printerName || 'Padrão',
-          message: res.message || `Teste impresso com sucesso na impressora "${res.printer || printerName || 'Padrão'}"!`,
+          printer: res.printer || resolvedPrinter || 'Padrão',
+          message: res.message || `Teste impresso com sucesso na impressora "${res.printer || resolvedPrinter || 'Padrão'}"!`,
           timestamp: Date.now()
         }
       });
@@ -232,4 +264,10 @@ export function startSupabasePrinterListener({
   });
 
   return channel;
+}
+
+// Auto-inicia quando executado diretamente pelo terminal (ex: node server/supabasePrinterBridge.js)
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  console.log('🚀 Iniciando Ponte de Impressão em Nuvem (Supabase Realtime)...');
+  startSupabasePrinterListener();
 }
